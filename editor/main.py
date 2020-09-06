@@ -18,27 +18,43 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
 
     SCREEN_HEIGHT = curses.LINES
 
-    cx = cy = 0
+    buf = Buffer()
 
     while True:
         # Update screen
         for y, line in enumerate(lines[:SCREEN_HEIGHT]):
             stdscr.addstr(y, 0, line)
-        stdscr.move(cy, cx)
+        stdscr.move(buf.cy, buf.cx)
 
         # Handle keypresses
         c = stdscr.getkey()
         if c == "q":
             break
         elif c == "k":
-            if cy > 0:
-                cy -= 1
+            buf.up()
         elif c == "j":
-            cy += 1
+            buf.down()
         elif c == "h":
-            if cx > 0:
-                cx -= 1
+            buf.left()
         elif c == "l":
-            cx += 1
+            buf.right()
 
     return 0
+
+
+class Buffer:
+    def __init__(self, cx: int = 0, cy: int = 0):
+        self.cx = cx
+        self.cy = cy
+
+    def up(self) -> None:
+        self.cy -= 1
+
+    def down(self) -> None:
+        self.cy += 1
+
+    def left(self) -> None:
+        self.cx -= 1
+
+    def right(self) -> None:
+        self.cx += 1
