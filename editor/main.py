@@ -1,5 +1,6 @@
 import argparse
 import curses
+import sys
 from typing import Optional
 from typing import Sequence
 
@@ -38,11 +39,17 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
             buf.left()
         elif c == "l":
             buf.right()
+        elif c == "0":
+            buf.home()
+        elif c == "$":
+            buf.end()
 
     return 0
 
 
 class Buffer:
+    MAX_CX = sys.maxsize
+
     def __init__(
         self,
         lines: Optional[Sequence[str]] = None,
@@ -67,6 +74,15 @@ class Buffer:
             self._set_cx_after_vertical_movement()
         return self
 
+    def _set_cx_after_vertical_movement(self) -> None:
+        if self.cx > self._max_cx:
+            # Cursor exceeded the line
+            if self.cx > self._cx_hint:
+                self._cx_hint = self.cx
+            self.cx = max(self._max_cx, 0)
+        else:
+            self.cx = min(self._cx_hint, self._max_cx)
+
     def left(self) -> "Buffer":
         if self.cx > 0:
             self.cx -= 1
@@ -79,14 +95,14 @@ class Buffer:
             self._cx_hint = self.cx
         return self
 
-    def _set_cx_after_vertical_movement(self) -> None:
-        if self.cx > self._max_cx:
-            # Cursor exceeded the line
-            if self.cx > self._cx_hint:
-                self._cx_hint = self.cx
-            self.cx = max(self._max_cx, 0)
-        else:
-            self.cx = min(self._cx_hint, self._max_cx)
+    def home(self) -> "Buffer":
+        self.cx = self._cx_hint = 0
+        return self
+
+    def end(self) -> "Buffer":
+        self._cx_hint = self.MAX_CX
+        self.cx = min(self._cx_hint, self._max_cx)
+        return self
 
     @property
     def _max_cx(self) -> int:

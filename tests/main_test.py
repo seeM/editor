@@ -113,3 +113,18 @@ def test_buffer_right():
 
 def test_buffer_right_at_last_char():
     assert Buffer(["foo"], cx=2).right().cx == 2
+
+
+def test_buffer_home():
+    assert Buffer(["foo"], cx=2).home().cx == 0
+
+
+def test_buffer_end():
+    assert Buffer(["foo"]).end().cx == 2
+
+
+def test_buffer_end_makes_vertical_movement_always_move_to_last_char():
+    buf = Buffer(["short", "longer line", "long line"])
+    assert buf.end().cx == 4
+    assert buf.down().cx == 10
+    assert buf.down().cx == 8
