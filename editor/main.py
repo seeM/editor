@@ -18,7 +18,7 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
 
     SCREEN_HEIGHT = curses.LINES
 
-    buf = Buffer()
+    buf = Buffer(lines)
 
     while True:
         # Update screen
