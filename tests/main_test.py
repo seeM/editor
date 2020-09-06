@@ -10,7 +10,7 @@ def test_buffer_up_at_first_line():
 
 
 def test_buffer_down():
-    assert Buffer().down().cy == 1
+    assert Buffer(["foo", "bar"]).down().cy == 1
 
 
 def test_buffer_down_at_last_line():
