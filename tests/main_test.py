@@ -26,7 +26,7 @@ def test_buffer_left_at_first_char():
 
 
 def test_buffer_right():
-    assert Buffer().right().cx == 1
+    assert Buffer(["foo"]).right().cx == 1
 
 
 def test_buffer_right_at_last_char():
