@@ -3,7 +3,6 @@ import curses
 from typing import Optional
 from typing import Sequence
 
-from .buf import Buffer
 from .window import Window
 
 
@@ -19,30 +18,30 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
     with open(filename) as f:
         lines = f.read().split("\n")
 
-    buf = Buffer(lines)
-    window = Window(buf, curses.COLS, curses.LINES)
+    win = Window(lines, curses.COLS, curses.LINES)
 
     while True:
         # Update screen
-        for y, line in enumerate(window.lines):
+        for y, line in enumerate(lines[: curses.LINES]):
             stdscr.addstr(y, 0, line)
-        stdscr.move(window.cy, window.cx)
+        cx, cy = win.screen_cursor()
+        stdscr.move(cy, cx)
 
         # Handle keypresses
         c = stdscr.getkey()
         if c == "q":
             break
         elif c == "k":
-            buf.up()
+            win.up()
         elif c == "j":
-            buf.down()
+            win.down()
         elif c == "h":
-            buf.left()
+            win.left()
         elif c == "l":
-            buf.right()
+            win.right()
         elif c == "0":
-            buf.home()
+            win.home()
         elif c == "$":
-            buf.end()
+            win.end()
 
     return 0
