@@ -53,22 +53,41 @@ class Buffer:
         self.cx = cx
         self.cy = cy
 
+        self._cx_hint = cx
+
     def up(self) -> "Buffer":
         if self.cy > 0:
             self.cy -= 1
+            self._set_cx_after_vertical_movement()
         return self
 
     def down(self) -> "Buffer":
         if self.cy < len(self._lines) - 1:
             self.cy += 1
+            self._set_cx_after_vertical_movement()
         return self
 
     def left(self) -> "Buffer":
         if self.cx > 0:
             self.cx -= 1
+            self._cx_hint = self.cx
         return self
 
     def right(self) -> "Buffer":
-        if self.cx < len(self._lines[self.cy]) - 1:
+        if self.cx < self._max_cx:
             self.cx += 1
+            self._cx_hint = self.cx
         return self
+
+    def _set_cx_after_vertical_movement(self) -> None:
+        if self.cx > self._max_cx:
+            # Cursor exceeded the line
+            if self.cx > self._cx_hint:
+                self._cx_hint = self.cx
+            self.cx = max(self._max_cx, 0)
+        else:
+            self.cx = min(self._cx_hint, self._max_cx)
+
+    @property
+    def _max_cx(self) -> int:
+        return len(self._lines[self.cy]) - 1
