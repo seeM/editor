@@ -4,6 +4,7 @@ from typing import Optional
 from typing import Sequence
 
 from .buf import Buffer
+from .window import Window
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -18,15 +19,14 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
     with open(filename) as f:
         lines = f.read().split("\n")
 
-    SCREEN_HEIGHT = curses.LINES
-
     buf = Buffer(lines)
+    window = Window(buf, curses.COLS, curses.LINES)
 
     while True:
         # Update screen
-        for y, line in enumerate(lines[:SCREEN_HEIGHT]):
+        for y, line in enumerate(window.lines):
             stdscr.addstr(y, 0, line)
-        stdscr.move(buf.cy, buf.cx)
+        stdscr.move(window.cy, window.cx)
 
         # Handle keypresses
         c = stdscr.getkey()
