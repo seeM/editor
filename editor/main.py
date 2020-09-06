@@ -1,14 +1,27 @@
+import argparse
 import curses
+from typing import Optional
+from typing import Sequence
 
 
-def main() -> int:
-    return curses.wrapper(c_main)
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename")
+    args = parser.parse_args(argv)
+
+    return curses.wrapper(c_main, args.filename)
 
 
-def c_main(stdscr: "curses._CursesWindow") -> int:
+def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
+    with open(filename) as f:
+        lines = f.read().split("\n")
+
+    SCREEN_HEIGHT = curses.LINES
+
     while True:
         # Update screen
-        stdscr.addstr(0, 0, "Hello world!")
+        for y, line in enumerate(lines[:SCREEN_HEIGHT]):
+            stdscr.addstr(y, 0, line)
 
         # Handle keypresses
         c = stdscr.getkey()
