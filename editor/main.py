@@ -64,9 +64,11 @@ class Buffer:
         return self
 
     def left(self) -> "Buffer":
-        self.cx -= 1
+        if self.cx > 0:
+            self.cx -= 1
         return self
 
     def right(self) -> "Buffer":
-        self.cx += 1
+        if self.cx < len(self._lines[self.cy]) - 1:
+            self.cx += 1
         return self

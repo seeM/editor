@@ -21,5 +21,13 @@ def test_buffer_left():
     assert Buffer(cx=1).left().cx == 0
 
 
+def test_buffer_left_at_first_char():
+    assert Buffer().left().cx == 0
+
+
 def test_buffer_right():
     assert Buffer().right().cx == 1
+
+
+def test_buffer_right_at_last_char():
+    assert Buffer(["foo"], cx=2).right().cx == 2
