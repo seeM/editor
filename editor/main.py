@@ -43,7 +43,13 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
 
 
 class Buffer:
-    def __init__(self, cx: int = 0, cy: int = 0):
+    def __init__(
+        self,
+        lines: Optional[Sequence[str]] = None,
+        cx: int = 0,
+        cy: int = 0,
+    ):
+        self._lines = lines or []
         self.cx = cx
         self.cy = cy
 
@@ -53,7 +59,8 @@ class Buffer:
         return self
 
     def down(self) -> "Buffer":
-        self.cy += 1
+        if self.cy < len(self._lines) - 1:
+            self.cy += 1
         return self
 
     def left(self) -> "Buffer":

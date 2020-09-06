@@ -14,7 +14,7 @@ def test_buffer_down():
 
 
 def test_buffer_down_at_last_line():
-    assert Buffer().up().cy == 0
+    assert Buffer(["foo"]).down().cy == 0
 
 
 def test_buffer_left():
