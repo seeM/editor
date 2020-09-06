@@ -47,14 +47,19 @@ class Buffer:
         self.cx = cx
         self.cy = cy
 
-    def up(self) -> None:
-        self.cy -= 1
+    def up(self) -> "Buffer":
+        if self.cy > 0:
+            self.cy -= 1
+        return self
 
-    def down(self) -> None:
+    def down(self) -> "Buffer":
         self.cy += 1
+        return self
 
-    def left(self) -> None:
+    def left(self) -> "Buffer":
         self.cx -= 1
+        return self
 
-    def right(self) -> None:
+    def right(self) -> "Buffer":
         self.cx += 1
+        return self
