@@ -6,6 +6,7 @@ from typing import Tuple
 
 class Window:
     MAX_CX = sys.maxsize
+    SCROLL_MARGIN = 1
 
     def __init__(
         self,
@@ -14,16 +15,16 @@ class Window:
         height: int = 0,
         cx: int = 0,
         cy: int = 0,
-        bx: int = 0,
-        by: int = 0,
+        wx: int = 0,
+        wy: int = 0,
     ):
         self._lines = lines or []
         self.width = width
         self.height = height
         self.cx = cx
         self.cy = cy
-        self.bx = bx
-        self.by = by
+        self.wx = wx
+        self.wy = wy
 
         self._cx_hint = cx
 
@@ -31,12 +32,21 @@ class Window:
         if self.cy > 0:
             self.cy -= 1
             self._set_cx_after_vertical_movement()
+            if self.wy > 0 and self.cy < self.wy + self.SCROLL_MARGIN:
+                self.wy -= 1
         return self
 
     def down(self) -> "Window":
         if self.cy < len(self._lines) - 1:
             self.cy += 1
             self._set_cx_after_vertical_movement()
+            if (
+                # The window hasn't exceeded the file.
+                self.wy + self.height < len(self._lines)
+                # The cursor has exceeded the window.
+                and self.cy >= self.wy + self.height - self.SCROLL_MARGIN
+            ):
+                self.wy += 1
         return self
 
     def _set_cx_after_vertical_movement(self) -> None:
@@ -74,7 +84,7 @@ class Window:
         return len(self._lines[self.cy]) - 1
 
     def screen_cursor(self) -> Tuple[int, int]:
-        return (self.bx + self.cx, self.by + self.cy)
+        return (self.cy - self.wy, self.cx - self.wx)
 
     def screen_lines(self) -> Sequence[str]:
-        return self._lines[-self.by : (self.height - self.by)]
+        return self._lines[self.wy : self.wy + self.height]

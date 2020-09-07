@@ -20,12 +20,15 @@ def c_main(stdscr: "curses._CursesWindow", filename: str) -> int:
 
     win = Window(lines, curses.COLS, curses.LINES)
 
+    prev_wx, prev_wy = None, None
     while True:
         # Update screen
-        for y, line in enumerate(lines[: curses.LINES]):
-            stdscr.addstr(y, 0, line)
-        cx, cy = win.screen_cursor()
-        stdscr.move(cy, cx)
+        if (prev_wx, prev_wy) != (win.wx, win.wy):
+            stdscr.erase()
+            for y, line in enumerate(win.screen_lines()):
+                stdscr.addstr(y, 0, line)
+        prev_wy, prev_wx = win.screen_cursor()
+        stdscr.move(*win.screen_cursor())
 
         # Handle keypresses
         c = stdscr.getkey()

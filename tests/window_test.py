@@ -50,6 +50,16 @@ def test_window_up_passed_shorter_line():
     assert win.cy == 2
 
 
+def test_window_up_scroll():
+    win = Window(["foo", "bar", "baz"], height=2, wy=1, cy=2)
+    win.up()
+    assert win.wy == 0
+    assert win.cy == 1
+    win.up()
+    assert win.wy == 0
+    assert win.cy == 0
+
+
 def test_window_down():
     assert Window(["foo", "bar"]).down().cy == 1
 
@@ -99,6 +109,19 @@ def test_window_down_at_last_line():
     assert Window(["foo"]).down().cy == 0
 
 
+def test_window_down_scroll():
+    win = Window(["foo", "bar", "baz", "foo"], height=3, wy=0, cy=0)
+    win.down().down()
+    assert win.wy == 1
+    assert win.cy == 2
+    win.down()
+    assert win.wy == 1
+    assert win.cy == 3
+    win.down()
+    assert win.wy == 1
+    assert win.cy == 3
+
+
 def test_window_left():
     assert Window(cx=1).left().cx == 0
 
@@ -132,13 +155,17 @@ def test_window_end_makes_vertical_movement_always_move_to_last_char():
 
 def test_window_screen_cursor():
     lines = ["foo", "bar", "baz"]
-    window = Window(lines, bx=-1, by=-1, cx=2, cy=2)
-    assert window.screen_cursor() == (1, 1)
+    # See:
+    #   r
+    #   z
+    # with cursor on 'z' ie at (1, 0) on the screen
+    window = Window(lines, wx=2, wy=1, cx=2, cy=2)
+    assert window.screen_cursor() == (1, 0)
 
 
 def test_window_screen_lines_vertical_scroll():
     lines = ["foo", "bar", "baz"]
-    window = Window(lines, width=3, height=3, by=-1, cx=2, cy=2)
+    window = Window(lines, width=3, height=3, wy=1, cx=2, cy=2)
     assert window.screen_lines() == ["bar", "baz"]
 
 
