@@ -27,7 +27,7 @@ class Editor:
     def __init__(self, filename: str):
         with open(filename) as f:
             lines = f.read().split("\n")
-        self.buffer = Buffer(lines)
+        self.buffer = Buffer(lines, filename)
         self.cursor = Cursor()
         self.window = Window(curses.COLS, curses.LINES)
 
@@ -64,20 +64,26 @@ class Editor:
             self.delete_char()
         elif c == "^D":  # del
             self.delete_forward_char()
+        elif c == "^S":
+            self.save_buffer()
         else:
             self.add_char(c)
 
     def previous_line(self) -> None:
         self.cursor = self.cursor.up(self.buffer)
+        self.window.scroll_up(self.cursor)
 
     def next_line(self) -> None:
         self.cursor = self.cursor.down(self.buffer)
+        self.window.scroll_down(self.cursor, self.buffer)
 
     def backward_char(self) -> None:
         self.cursor = self.cursor.left(self.buffer)
+        self.window.scroll_up(self.cursor)
 
     def forward_char(self) -> None:
         self.cursor = self.cursor.right(self.buffer)
+        self.window.scroll_down(self.cursor, self.buffer)
 
     def delete_char(self) -> None:
         if not (self.cursor.y == 0 and self.cursor.x == 0):
@@ -86,6 +92,7 @@ class Editor:
             cursor = self.cursor.left(self.buffer)
             self.buffer = self.buffer.delete_char(self.cursor)
             self.cursor = cursor
+            self.window.scroll_up(self.cursor)
 
     def delete_forward_char(self) -> None:
         if not (
@@ -101,12 +108,18 @@ class Editor:
     def newline(self) -> None:
         self.buffer = self.buffer.newline(self.cursor)
         self.cursor = self.cursor.right(self.buffer)
+        self.window.scroll_down(self.cursor, self.buffer)
 
     def move_beginning_of_line(self) -> None:
         self.cursor = self.cursor.move_beginning_of_line()
 
     def move_end_of_line(self) -> None:
         self.cursor = self.cursor.move_end_of_line(self.buffer)
+
+    def save_buffer(self) -> None:
+        # TODO: This isn't safe! We should check if the file changed externally.
+        with open(self.buffer.filename, "w") as f:
+            f.write("\n".join(self.buffer))
 
 
 class Cursor:
@@ -177,13 +190,14 @@ def clamp(x: Any, lower: Any, upper: Any) -> Any:
 
 
 class Buffer:
-    def __init__(self, lines: List[str]):
+    def __init__(self, lines: List[str], filename: str):
         self.lines = lines
+        self.filename = filename
 
     # Helpers
 
     def copy(self) -> "Buffer":
-        return Buffer(self.lines.copy())
+        return Buffer(self.lines.copy(), self.filename)
 
     def pop(self, index: int) -> str:
         return self.lines.pop(index)
@@ -262,8 +276,25 @@ class Window:
         self.x = 0
         self.y = 0
 
+    @property
+    def y_end(self) -> int:
+        return self.y + self.height
+
     def visible_lines(self, buffer: Buffer) -> List[str]:
-        return buffer[self.y : self.y + self.height]
+        return buffer[self.y : self.y_end]
 
     def cursor_position(self, cursor: Cursor) -> Tuple[int, int]:
         return cursor.y - self.y, cursor.x - self.x
+
+    def scroll_up(self, cursor: Cursor, scroll_margin: int = 1) -> None:
+        if self.y > 0 and cursor.y < self.y + scroll_margin:
+            self.y -= 1
+
+    def scroll_down(
+        self,
+        cursor: Cursor,
+        buffer: Buffer,
+        scroll_margin: int = 1,
+    ) -> None:
+        if self.y_end < len(buffer) and cursor.y >= self.y_end - scroll_margin:
+            self.y += 1
