@@ -204,7 +204,6 @@ class Buffer:
     def delete_char(self, cursor: Cursor) -> "Buffer":
         if cursor.x == 0:
             return self.join_previous_line(cursor)
-
         buffer = self.copy()
         line = buffer.pop(cursor.y)
         buffer.insert(cursor.y, line[: cursor.x - 1] + line[cursor.x :])
@@ -219,28 +218,26 @@ class Buffer:
     def delete_forward_char(self, cursor: Cursor) -> "Buffer":
         if cursor.x == len(self[cursor.y]):
             return self.join_next_line(cursor)
-        lines = self.lines.copy()
-        line = lines.pop(cursor.y)
-        line = line[: cursor.x] + line[cursor.x + 1 :]
-        lines.insert(cursor.y, line)
-        return Buffer(lines)
+        buffer = self.copy()
+        line = buffer.pop(cursor.y)
+        buffer.insert(cursor.y, line[: cursor.x] + line[cursor.x + 1 :])
+        return buffer
 
     def join_next_line(self, cursor: Cursor) -> "Buffer":
-        lines = self.lines.copy()
-        line = lines.pop(cursor.y)
-        lines[cursor.y] += line
-        return Buffer(lines)
+        buffer = self.copy()
+        line = buffer.pop(cursor.y)
+        buffer[cursor.y] += line
+        return buffer
 
     def add_char(self, cursor: Cursor, c: str) -> "Buffer":
-        lines = self.lines.copy()
-        line = lines.pop(cursor.y)
-        line = line[: cursor.x] + c + line[cursor.x :]
-        lines.insert(cursor.y, line)
-        return Buffer(lines)
+        buffer = self.copy()
+        line = buffer.pop(cursor.y)
+        buffer.insert(cursor.y, line[: cursor.x] + c + line[cursor.x :])
+        return buffer
 
     def newline(self, cursor: Cursor) -> "Buffer":
-        lines = self.lines.copy()
-        line = lines.pop(cursor.y)
-        lines.insert(cursor.y, line[: cursor.x])
-        lines.insert(cursor.y + 1, line[cursor.x :])
-        return Buffer(lines)
+        buffer = self.copy()
+        line = buffer.pop(cursor.y)
+        buffer.insert(cursor.y, line[: cursor.x])
+        buffer.insert(cursor.y + 1, line[cursor.x :])
+        return buffer
