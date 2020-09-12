@@ -2,6 +2,7 @@ import argparse
 import curses
 import sys
 from typing import Any
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Sequence
@@ -33,7 +34,7 @@ class Editor:
 
     def render(self, stdscr: "curses._CursesWindow") -> None:
         stdscr.erase()
-        for y, line in enumerate(self.buffer.lines):
+        for y, line in enumerate(self.buffer):
             stdscr.addstr(y, 0, line)
         stdscr.move(self.cursor.y, self.cursor.x)
 
@@ -194,6 +195,9 @@ class Buffer:
 
     def __len__(self) -> int:
         return len(self.lines)
+
+    def __iter__(self) -> Iterator[str]:
+        yield from self.lines
 
     # Primary interface
 
