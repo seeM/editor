@@ -5,7 +5,10 @@ from typing import Any
 from typing import Iterator
 from typing import List
 from typing import Optional
+from typing import overload
 from typing import Sequence
+from typing import Tuple
+from typing import Union
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -26,6 +29,7 @@ class Editor:
             lines = f.read().split("\n")
         self.buffer = Buffer(lines)
         self.cursor = Cursor()
+        self.window = Window(curses.COLS, curses.LINES)
 
     def run(self, stdscr: "curses._CursesWindow") -> None:
         while True:
@@ -34,9 +38,9 @@ class Editor:
 
     def render(self, stdscr: "curses._CursesWindow") -> None:
         stdscr.erase()
-        for y, line in enumerate(self.buffer):
+        for y, line in enumerate(self.window.visible_lines(self.buffer)):
             stdscr.addstr(y, 0, line)
-        stdscr.move(self.cursor.y, self.cursor.x)
+        stdscr.move(*self.window.cursor_position(self.cursor))
 
     def handle_key(self, stdscr: "curses._CursesWindow") -> None:
         c = curses.keyname(stdscr.getch()).decode()
@@ -190,7 +194,17 @@ class Buffer:
     def __setitem__(self, index: int, value: str) -> None:
         self.lines[index] = value
 
+    @overload
     def __getitem__(self, index: int) -> str:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> List[str]:
+        ...
+
+    def __getitem__(self, index: Union[int, slice]) -> Union[str, List[str]]:
+        if isinstance(index, slice):
+            return self.lines[index]
         return self.lines[index]
 
     def __len__(self) -> int:
@@ -211,8 +225,7 @@ class Buffer:
 
     def join_previous_line(self, cursor: Cursor) -> "Buffer":
         buffer = self.copy()
-        line = buffer.pop(cursor.y)
-        buffer[cursor.y - 1] += line
+        buffer[cursor.y - 1] += buffer.pop(cursor.y)
         return buffer
 
     def delete_forward_char(self, cursor: Cursor) -> "Buffer":
@@ -225,8 +238,7 @@ class Buffer:
 
     def join_next_line(self, cursor: Cursor) -> "Buffer":
         buffer = self.copy()
-        line = buffer.pop(cursor.y)
-        buffer[cursor.y] += line
+        buffer[cursor.y] += buffer.pop(cursor.y)
         return buffer
 
     def add_char(self, cursor: Cursor, c: str) -> "Buffer":
@@ -241,3 +253,17 @@ class Buffer:
         buffer.insert(cursor.y, line[: cursor.x])
         buffer.insert(cursor.y + 1, line[cursor.x :])
         return buffer
+
+
+class Window:
+    def __init__(self, width: int, height: int):
+        self.width = width
+        self.height = height
+        self.x = 0
+        self.y = 0
+
+    def visible_lines(self, buffer: Buffer) -> List[str]:
+        return buffer[self.y : self.y + self.height]
+
+    def cursor_position(self, cursor: Cursor) -> Tuple[int, int]:
+        return cursor.y - self.y, cursor.x - self.x
