@@ -29,17 +29,27 @@ class Editor:
             lines = f.read().split("\n")
         self.buffer = Buffer(lines, filename)
         self.cursor = Cursor()
-        self.window = Window(curses.COLS, curses.LINES)
+        self.window = Window(curses.COLS, curses.LINES - 1)
+        self.history: List[Tuple[Buffer, Cursor]] = []
+        self.command_line = ""
 
     def run(self, stdscr: "curses._CursesWindow") -> None:
         while True:
             self.render(stdscr)
+            self.command_line = ""
             self.handle_key(stdscr)
 
     def render(self, stdscr: "curses._CursesWindow") -> None:
         stdscr.erase()
         for y, line in enumerate(self.window.visible_lines(self.buffer)):
             stdscr.addstr(y, 0, line)
+        stdscr.addstr(
+            self.window.height - 1,
+            0,
+            self.window.status_line(self.buffer, self.cursor),
+            curses.A_REVERSE,
+        )
+        stdscr.addstr(self.window.height, 0, self.command_line)
         stdscr.move(*self.window.cursor_position(self.cursor))
 
     def handle_key(self, stdscr: "curses._CursesWindow") -> None:
@@ -66,8 +76,13 @@ class Editor:
             self.delete_forward_char()
         elif c == "^S":
             self.save_buffer()
+        elif c == "^_":  # C-/
+            self.undo()
         else:
             self.add_char(c)
+
+    def _checkpoint(self) -> None:
+        self.history.append((self.buffer, self.cursor))
 
     def previous_line(self) -> None:
         self.cursor = self.cursor.up(self.buffer)
@@ -87,6 +102,7 @@ class Editor:
 
     def delete_char(self) -> None:
         if not (self.cursor.y == 0 and self.cursor.x == 0):
+            self._checkpoint()
             # Move the cursor with the unmodified buffer, else it ends up at the
             # end of the new, combined line.
             cursor = self.cursor.left(self.buffer)
@@ -99,13 +115,16 @@ class Editor:
             self.cursor.y == len(self.buffer) - 1
             and self.cursor.x == len(self.buffer[self.cursor.y])
         ):
+            self._checkpoint()
             self.buffer = self.buffer.delete_forward_char(self.cursor)
 
     def add_char(self, c: str) -> None:
+        self._checkpoint()
         self.buffer = self.buffer.add_char(self.cursor, c)
         self.cursor = self.cursor.right(self.buffer)
 
     def newline(self) -> None:
+        self._checkpoint()
         self.buffer = self.buffer.newline(self.cursor)
         self.cursor = self.cursor.right(self.buffer)
         self.window.scroll_down(self.cursor, self.buffer)
@@ -120,6 +139,11 @@ class Editor:
         # TODO: This isn't safe! We should check if the file changed externally.
         with open(self.buffer.filename, "w") as f:
             f.write("\n".join(self.buffer))
+        self.command_line = f'"{self.buffer.filename}" {len(self.buffer)}L written'
+
+    def undo(self) -> None:
+        if self.history:
+            self.buffer, self.cursor = self.history.pop()
 
 
 class Cursor:
@@ -252,7 +276,7 @@ class Buffer:
 
     def join_next_line(self, cursor: Cursor) -> "Buffer":
         buffer = self.copy()
-        buffer[cursor.y] += buffer.pop(cursor.y)
+        buffer[cursor.y] += buffer.pop(cursor.y + 1)
         return buffer
 
     def add_char(self, cursor: Cursor, c: str) -> "Buffer":
@@ -278,7 +302,7 @@ class Window:
 
     @property
     def y_end(self) -> int:
-        return self.y + self.height
+        return self.y + self.height - 1  # status height
 
     def visible_lines(self, buffer: Buffer) -> List[str]:
         return buffer[self.y : self.y_end]
@@ -286,15 +310,16 @@ class Window:
     def cursor_position(self, cursor: Cursor) -> Tuple[int, int]:
         return cursor.y - self.y, cursor.x - self.x
 
-    def scroll_up(self, cursor: Cursor, scroll_margin: int = 1) -> None:
-        if self.y > 0 and cursor.y < self.y + scroll_margin:
+    def scroll_up(self, cursor: Cursor, margin: int = 1) -> None:
+        if self.y > 0 and cursor.y < self.y + margin:
             self.y -= 1
 
-    def scroll_down(
-        self,
-        cursor: Cursor,
-        buffer: Buffer,
-        scroll_margin: int = 1,
-    ) -> None:
-        if self.y_end < len(buffer) and cursor.y >= self.y_end - scroll_margin:
+    def scroll_down(self, cursor: Cursor, buffer: Buffer, margin: int = 1) -> None:
+        if self.y_end < len(buffer) and cursor.y >= self.y_end - margin:
             self.y += 1
+
+    def status_line(self, buffer: Buffer, cursor: Cursor) -> str:
+        file_status = " " + buffer.filename
+        cursor_status = f"L: {cursor.y + 1}/{len(buffer)} C: {cursor.x + 1}" + " "
+        pad_length = self.width - len(file_status) - len(cursor_status) - 1
+        return file_status + " " * pad_length + cursor_status
