@@ -1,5 +1,5 @@
 import argparse
-import curses
+import curses.ascii
 import sys
 from typing import Any
 from typing import Iterator
@@ -30,8 +30,11 @@ class Editor:
         self.buffer = Buffer(lines, filename)
         self.cursor = Cursor()
         self.window = Window(curses.COLS, curses.LINES - 1)
-        self.history: List[Tuple[Buffer, Cursor]] = []
+        self.undo_stack: List[Tuple[Buffer, Cursor]] = []
+        self.redo_stack: List[Tuple[Buffer, Cursor]] = []
         self.command_line = ""
+
+    # Main
 
     def run(self, stdscr: "curses._CursesWindow") -> None:
         while True:
@@ -41,48 +44,95 @@ class Editor:
 
     def render(self, stdscr: "curses._CursesWindow") -> None:
         stdscr.erase()
+        # Window
         for y, line in enumerate(self.window.visible_lines(self.buffer)):
             stdscr.addstr(y, 0, line)
+        # Status line
         stdscr.addstr(
             self.window.height - 1,
             0,
             self.window.status_line(self.buffer, self.cursor),
             curses.A_REVERSE,
         )
+        # Command line
         stdscr.addstr(self.window.height, 0, self.command_line)
+        # Cursor
         stdscr.move(*self.window.cursor_position(self.cursor))
 
     def handle_key(self, stdscr: "curses._CursesWindow") -> None:
-        c = curses.keyname(stdscr.getch()).decode()
-        if c == "^Q":
-            sys.exit(0)
-        elif c == "^P":
+        c = self.getkey(stdscr)
+
+        with open("log.txt", "a") as f:
+            f.write(c + "\n")
+
+        if c == "C-q":
+            self.exit()
+        elif c == "C-p":
             self.previous_line()
-        elif c == "^N":
+        elif c == "C-n":
             self.next_line()
-        elif c == "^B":
+        elif c == "C-b":
             self.backward_char()
-        elif c == "^F":
+        elif c == "C-f":
             self.forward_char()
-        elif c == "^A":
+        elif c == "C-a":
             self.move_beginning_of_line()
-        elif c == "^E":
+        elif c == "C-e":
             self.move_end_of_line()
-        elif c == "^J":
+        elif c == "C-j":  # <enter>
             self.newline()
-        elif c == "^?":  # backspace
+        elif c == "<backspace>":
             self.delete_char()
-        elif c == "^D":  # del
+        elif c == "C-d":  # del
             self.delete_forward_char()
-        elif c == "^S":
+        elif c == "C-s":
             self.save_buffer()
-        elif c == "^_":  # C-/
+        elif c == "C-_":  # C-/
             self.undo()
+        elif c == "M-/":
+            self.redo()
         else:
             self.add_char(c)
 
-    def _checkpoint(self) -> None:
-        self.history.append((self.buffer, self.cursor))
+    def exit(self) -> None:
+        sys.exit(0)
+
+    # Keyboard
+
+    def getkey(self, stdscr: "curses._CursesWindow") -> str:
+        # TODO: Make a simple Key class that knows that some keys
+        #       have multiple possible chars. E.g., C-j = RET = ...
+        c = stdscr.getch()
+
+        # Meta
+        if c == curses.ascii.ESC:
+            stdscr.nodelay(True)
+            c2 = stdscr.getch()
+            stdscr.nodelay(False)
+            if c2 == curses.ERR:  # no additional key pressed
+                return "<escape>"
+            # Ctrl + Meta
+            c2_unctrl = curses.unctrl(c2).decode("ascii")
+            if curses.ascii.isctrl(c2):
+                c2_key = c2_unctrl[1:].lower()
+                return f"C-M-{c2_key}"
+            return f"M-{c2_unctrl}"
+
+        # Ctrl
+        if curses.ascii.isctrl(c):
+            c_key = curses.unctrl(c).decode("ascii")[1:].lower()
+            return f"C-{c_key}"
+
+        if c == curses.ascii.DEL:
+            return "<backspace>"
+
+        # Plain char
+        if curses.ascii.isprint(c):
+            return curses.unctrl(c).decode("ascii")
+
+        raise NotImplementedError(f"Unknown character key code: {c}")
+
+    # Cursor movement
 
     def previous_line(self) -> None:
         self.cursor = self.cursor.up(self.buffer)
@@ -99,6 +149,8 @@ class Editor:
     def forward_char(self) -> None:
         self.cursor = self.cursor.right(self.buffer)
         self.window.scroll_down(self.cursor, self.buffer)
+
+    # Buffer editing
 
     def delete_char(self) -> None:
         if not (self.cursor.y == 0 and self.cursor.x == 0):
@@ -135,15 +187,38 @@ class Editor:
     def move_end_of_line(self) -> None:
         self.cursor = self.cursor.move_end_of_line(self.buffer)
 
+    # IO
+
     def save_buffer(self) -> None:
         # TODO: This isn't safe! We should check if the file changed externally.
         with open(self.buffer.filename, "w") as f:
             f.write("\n".join(self.buffer))
-        self.command_line = f'"{self.buffer.filename}" {len(self.buffer)}L written'
+        self.send_message(f'"{self.buffer.filename}" {len(self.buffer)}L written')
+
+    # Undo/redo
+
+    def _checkpoint(self) -> None:
+        self.redo_stack = []
+        self.undo_stack.append((self.buffer, self.cursor))
 
     def undo(self) -> None:
-        if self.history:
-            self.buffer, self.cursor = self.history.pop()
+        if self.undo_stack:
+            self.redo_stack.append((self.buffer, self.cursor))
+            self.buffer, self.cursor = self.undo_stack.pop()
+        else:
+            self.send_message("Already at oldest change")
+
+    def redo(self) -> None:
+        if self.redo_stack:
+            self.undo_stack.append((self.buffer, self.cursor))
+            self.buffer, self.cursor = self.redo_stack.pop()
+        else:
+            self.send_message("Already at newest change")
+
+    # Messages
+
+    def send_message(self, message: str) -> None:
+        self.command_line = message
 
 
 class Cursor:
@@ -188,21 +263,6 @@ class Cursor:
     def column_move(self, n: int, buffer: "Buffer") -> "Cursor":
         x = clamp(self.x + n, 0, len(buffer[self.y]))
         return Cursor(x, self.y, x)
-
-    # TODO: Maybeeeee... add some nice sounding verbs
-
-    # def at_beginning_of_line(self) -> bool:
-    #     return self.x == 0
-
-    # def at_end_of_line(self, buffer: "Buffer") -> bool:
-    #     return self.x == len(buffer[self.y])
-
-    # def in_line(self, buffer: "Buffer") -> bool:
-    #     return self.x >= 0 and self.x <= len(buffer[self.y])
-
-    # at_start_of_file
-
-    # at_end_of_file
 
 
 def clamp(x: Any, lower: Any, upper: Any) -> Any:
