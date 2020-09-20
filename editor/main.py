@@ -1,3 +1,5 @@
+# TODO: is_modified and undo/redo might be buggy
+# TODO: Prompt to exit anyway on modified buffer?
 import argparse
 import curses.ascii
 import sys
@@ -95,6 +97,13 @@ class Editor:
             self.add_char(c)
 
     def exit(self) -> None:
+        # TODO: If any buffer has been modified, print an error message instead.
+        # TODO: Add a prompt that waits for the user to press enter to continue.
+        if self.buffer.is_modified:
+            self.send_message(
+                f'No write since last change for buffer "{self.buffer.filename}"',
+            )
+            return
         sys.exit(0)
 
     # Keyboard
@@ -191,8 +200,7 @@ class Editor:
 
     def save_buffer(self) -> None:
         # TODO: This isn't safe! We should check if the file changed externally.
-        with open(self.buffer.filename, "w") as f:
-            f.write("\n".join(self.buffer))
+        self.buffer.save()
         self.send_message(f'"{self.buffer.filename}" {len(self.buffer)}L written')
 
     # Undo/redo
@@ -278,18 +286,23 @@ class Buffer:
         self.lines = lines
         self.filename = filename
 
+        self.is_modified = False
+
     # Helpers
 
     def copy(self) -> "Buffer":
         return Buffer(self.lines.copy(), self.filename)
 
     def pop(self, index: int) -> str:
+        self.is_modified = True
         return self.lines.pop(index)
 
     def insert(self, index: int, line: str) -> None:
+        self.is_modified = True
         self.lines.insert(index, line)
 
     def __setitem__(self, index: int, value: str) -> None:
+        self.is_modified = True
         self.lines[index] = value
 
     @overload
@@ -311,7 +324,7 @@ class Buffer:
     def __iter__(self) -> Iterator[str]:
         yield from self.lines
 
-    # Primary interface
+    # Primary interface - editing
 
     def delete_char(self, cursor: Cursor) -> "Buffer":
         if cursor.x == 0:
@@ -352,6 +365,13 @@ class Buffer:
         buffer.insert(cursor.y + 1, line[cursor.x :])
         return buffer
 
+    # Files
+
+    def save(self) -> None:
+        with open(self.filename, "w") as f:
+            f.write("\n".join(self))
+        self.is_modified = False
+
 
 class Window:
     def __init__(self, width: int, height: int):
@@ -380,6 +400,8 @@ class Window:
 
     def status_line(self, buffer: Buffer, cursor: Cursor) -> str:
         file_status = " " + buffer.filename
+        if buffer.is_modified:
+            file_status += " [+]"
         cursor_status = f"L: {cursor.y + 1}/{len(buffer)} C: {cursor.x + 1}" + " "
         pad_length = self.width - len(file_status) - len(cursor_status) - 1
         return file_status + " " * pad_length + cursor_status
