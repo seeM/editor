@@ -5,6 +5,12 @@ from dataclasses import dataclass
 
 
 @dataclass
+class Cursor:
+    line: int = 0
+    col: int = 0
+
+
+@dataclass
 class Window:
     n_lines: int
     n_cols: int
@@ -27,11 +33,13 @@ def main(stdscr):
         buffer = f.readlines()
 
     window = Window(curses.LINES - 1, curses.COLS - 1)
+    cursor = Cursor()
 
     while True:
         stdscr.erase()
         for line, string in enumerate(window.trim(buffer)):
             stdscr.addstr(line, 0, string)
+        stdscr.move(cursor.line, cursor.col)
 
         k = stdscr.getkey()
         if k == "q":
