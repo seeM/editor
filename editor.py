@@ -1,13 +1,29 @@
 import argparse
 import curses
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+
+
+def clamp(x, lower, upper):
+    if x < lower:
+        return lower
+    if x > upper:
+        return upper
+    return x
 
 
 @dataclass
 class Cursor:
     line: int = 0
     col: int = 0
+
+    def line_move(self, buffer, n):
+        line = clamp(self.line + n, 0, len(buffer) - 1)
+        return replace(self, line=line)
+
+    def col_move(self, buffer, n):
+        col = clamp(self.col + n, 0, len(buffer[self.line]) - 1)
+        return replace(self, col=col)
 
 
 @dataclass
@@ -44,6 +60,14 @@ def main(stdscr):
         k = stdscr.getkey()
         if k == "q":
             sys.exit(0)
+        elif k == "KEY_LEFT":
+            cursor = cursor.col_move(buffer, -1)
+        elif k == "KEY_DOWN":
+            cursor = cursor.line_move(buffer, 1)
+        elif k == "KEY_UP":
+            cursor = cursor.line_move(buffer, -1)
+        elif k == "KEY_RIGHT":
+            cursor = cursor.col_move(buffer, 1)
 
 
 if __name__ == "__main__":
