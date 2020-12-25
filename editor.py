@@ -2,6 +2,7 @@ import argparse
 import curses
 import sys
 from dataclasses import dataclass, replace
+from typing import Optional
 
 
 def clamp(x, lower, upper):
@@ -16,14 +17,20 @@ def clamp(x, lower, upper):
 class Cursor:
     line: int = 0
     col: int = 0
+    col_hint: Optional[int] = None
+
+    def __post_init__(self):
+        if self.col_hint is None:
+            self.col_hint = self.col
 
     def line_move(self, buffer, n):
         line = clamp(self.line + n, 0, len(buffer) - 1)
-        return replace(self, line=line)
+        col = min(self.col_hint, len(buffer[line]) - 1)
+        return replace(self, line=line, col=col)
 
     def col_move(self, buffer, n):
         col = clamp(self.col + n, 0, len(buffer[self.line]) - 1)
-        return replace(self, col=col)
+        return replace(self, col=col, col_hint=col)
 
 
 @dataclass
