@@ -46,6 +46,36 @@ class Window:
             for string in buffer[self.line : self.line + self.n_lines]
         ]
 
+    def line_scroll(self, buffer, cursor, margin=1):
+        line = self._scroll(
+            window_pos=self.line,
+            window_length=self.n_lines,
+            cursor_pos=cursor.line,
+            buffer_length=len(buffer),
+            margin=margin,
+        )
+        return replace(self, line=line)
+
+    def col_scroll(self, buffer, cursor, margin=1):
+        col = self._scroll(
+            window_pos=self.col,
+            window_length=self.n_cols,
+            cursor_pos=cursor.col,
+            buffer_length=len(buffer[cursor.line]),
+            margin=margin,
+        )
+        return replace(self, col=col)
+
+    def _scroll(self, window_pos, window_length, cursor_pos, buffer_length, margin):
+        if (p := cursor_pos - margin) < window_pos:
+            return max(p, 0)
+        if (p := cursor_pos - window_length + margin + 1) > window_pos:
+            return min(p, buffer_length - window_length)
+        return window_pos
+
+    def translate(self, cursor):
+        return cursor.line - self.line, cursor.col - self.col
+
 
 def main(stdscr):
     parser = argparse.ArgumentParser()
@@ -62,19 +92,25 @@ def main(stdscr):
         stdscr.erase()
         for line, string in enumerate(window.trim(buffer)):
             stdscr.addstr(line, 0, string)
-        stdscr.move(cursor.line, cursor.col)
+        stdscr.move(*window.translate(cursor))
 
         k = stdscr.getkey()
         if k == "q":
             sys.exit(0)
         elif k == "KEY_LEFT":
             cursor = cursor.col_move(buffer, -1)
+            window = window.col_scroll(buffer, cursor)
         elif k == "KEY_DOWN":
             cursor = cursor.line_move(buffer, 1)
+            window = window.line_scroll(buffer, cursor)
+            window = window.col_scroll(buffer, cursor)
         elif k == "KEY_UP":
             cursor = cursor.line_move(buffer, -1)
+            window = window.line_scroll(buffer, cursor)
+            window = window.col_scroll(buffer, cursor)
         elif k == "KEY_RIGHT":
             cursor = cursor.col_move(buffer, 1)
+            window = window.col_scroll(buffer, cursor)
 
 
 if __name__ == "__main__":
