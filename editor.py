@@ -1,6 +1,21 @@
 import argparse
 import curses
 import sys
+from dataclasses import dataclass
+
+
+@dataclass
+class Window:
+    n_lines: int
+    n_cols: int
+    line: int = 0
+    col: int = 0
+
+    def trim(self, buffer):
+        return [
+            string[self.col : self.col + self.n_cols]
+            for string in buffer[self.line : self.line + self.n_lines]
+        ]
 
 
 def main(stdscr):
@@ -11,9 +26,11 @@ def main(stdscr):
     with open(args.filename) as f:
         buffer = f.readlines()
 
+    window = Window(curses.LINES - 1, curses.COLS - 1)
+
     while True:
         stdscr.erase()
-        for line, string in enumerate(buffer):
+        for line, string in enumerate(window.trim(buffer)):
             stdscr.addstr(line, 0, string)
 
         k = stdscr.getkey()
