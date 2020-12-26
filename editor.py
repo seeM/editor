@@ -63,7 +63,6 @@ class Window:
     n_lines: object
     n_cols: object
     line: object = 0
-    col: object = 0
 
     def __getitem__(self, index):
         if index == -1:
@@ -73,24 +72,6 @@ class Window:
     @property
     def last_line(self):
         return self.line + self.n_lines - 1
-
-    def view(self, buffer, cursor, scroll_amount=3, scroll_margin=2):
-        # Scroll the window along the current line.
-        self.col = 0
-        while cursor.col - self.col >= self.n_cols - scroll_margin:
-            self.col += scroll_amount
-
-        strings = []
-        for line, string in enumerate(buffer[self.line:self.line + self.n_lines]):
-            if line == cursor.line and self.col:
-                string = "«" + string[self.col + 1:]
-            if len(string) > self.n_cols:
-                string = string[:self.n_cols - 1] + "»"
-            strings.append(string)
-        return strings
-
-
-# def window_right(window, buffer, cursor):
 
 
 def do_right(window, buffer, cursor):
@@ -190,6 +171,26 @@ def do_backspace(window, buffer, cursor):
     return window, buffer, cursor
 
 
+def render(stdscr, window, buffer, cursor, right_margin=2, left_margin=5):
+    stdscr.erase()
+
+    # Scroll the window along the current line.
+    window_col = 0
+    while cursor.col - window_col >= window.n_cols - right_margin:
+        window_col += window.n_cols - right_margin - left_margin - 1
+
+    for line, string in enumerate(buffer[window.line:window.line + window.n_lines]):
+        # Add arrows for horizontal scrolling.
+        if line == cursor.line and window_col > 0:
+            string = "«" + string[window_col + 1:]
+        if len(string) > window.n_cols:
+            string = string[:window.n_cols - 1] + "»"
+
+        stdscr.addstr(line, 0, string)
+
+    stdscr.move(cursor.line - window.line, cursor.col - window_col)
+
+
 def main(stdscr):
     parser = argparse.ArgumentParser()
     parser.add_argument("filename")
@@ -198,15 +199,12 @@ def main(stdscr):
     with open(args.filename) as f:
         buffer = Buffer(f.read().splitlines())
 
-    # window = Window(curses.LINES - 1, curses.COLS - 1, buffer)
-    window = Window(4, 10)
+    window = Window(curses.LINES - 1, curses.COLS - 1)
+    # window = Window(4, 20)
     cursor = Cursor()
 
     while True:
-        stdscr.erase()
-        for line, string in enumerate(window.view(buffer, cursor)):
-            stdscr.addstr(line, 0, string)
-        stdscr.move(cursor.line - window.line, cursor.col - window.col)
+        render(stdscr, window, buffer, cursor)
 
         k = stdscr.getkey()
         if k == "q":
