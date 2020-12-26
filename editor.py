@@ -2,7 +2,7 @@ import argparse
 import curses
 import sys
 from dataclasses import dataclass, replace
-from typing import Optional
+from typing import List, Optional
 
 
 def clamp(x, lower, upper):
@@ -31,6 +31,17 @@ class Cursor:
     def col_move(self, buffer, n):
         col = clamp(self.col + n, 0, len(buffer[self.line]) - 1)
         return replace(self, col=col, col_hint=col)
+
+
+@dataclass
+class Buffer:
+    lines: List[str]
+
+    def __len__(self):
+        return len(self.lines)
+
+    def __getitem__(self, index):
+        return self.lines[index]
 
 
 @dataclass
@@ -83,7 +94,7 @@ def main(stdscr):
     args = parser.parse_args()
 
     with open(args.filename) as f:
-        buffer = f.readlines()
+        buffer = Buffer(f.readlines())
 
     window = Window(curses.LINES - 1, curses.COLS - 1)
     cursor = Cursor()
