@@ -1,4 +1,3 @@
-# TODO: Move horizontal scrolling out of view()...
 import argparse
 import curses
 import sys
@@ -57,138 +56,132 @@ class Cursor:
         if self.col_hint is None:
             self.col_hint = self.col
 
+    def right(self, buffer):
+        if self.col != len(buffer[self.line]):
+            col = self.col + 1
+            return replace(self, col=col, col_hint=col)
+        if self.line != buffer.last_line:
+            line = self.line + 1
+            col = 0
+            return replace(self, line=line, col=col, col_hint=col)
+        return self
+
+    def left(self, buffer):
+        if self.col != 0:
+            col = self.col - 1
+            return replace(self, col=col, col_hint=col)
+        if self.line != 0:
+            line = self.line - 1
+            col = len(buffer[line])
+            return replace(self, line=line, col=col, col_hint=col)
+        return self
+
+    def down(self, buffer):
+        if self.line == buffer.last_line:
+            return self
+        line = self.line + 1
+        col = min(self.col_hint, len(buffer[line]))
+        return replace(self, line=line, col=col)
+
+    def up(self, buffer):
+        if self.line == 0:
+            return self
+        line = self.line - 1
+        col = min(self.col_hint, len(buffer[line]))
+        return replace(self, line=line, col=col)
+
 
 @dataclass
 class Window:
     n_lines: object
     n_cols: object
     line: object = 0
-
-    def __getitem__(self, index):
-        if index == -1:
-            index = self.n_lines - 1
-        return self.buffer[index - self.line]
+    col: object = 0
 
     @property
     def last_line(self):
         return self.line + self.n_lines - 1
 
+    def down(self, buffer, cursor):
+        if cursor.line == self.last_line + 1 and self.last_line != buffer.last_line:
+            return replace(self, line=self.line + 1)
+        return self
 
-def do_right(window, buffer, cursor):
-    """Move the cursor right one character."""
-    if cursor.col != len(buffer[cursor.line]):
-        col = cursor.col + 1
-        cursor = replace(cursor, col=col, col_hint=col)
-    elif cursor.line != buffer.last_line:
-        line = cursor.line + 1
+    def up(self, cursor):
+        if cursor.line == self.line - 1 and self.line != 0:
+            return replace(self, line=self.line - 1)
+        return self
+
+    def horizontal_scroll(self, cursor, left_margin, right_margin):
         col = 0
-        cursor = replace(cursor, line=line, col=col, col_hint=col)
-    window = window_down(window, buffer, cursor)
-    return window, cursor
+        while cursor.col - col >= self.n_cols - right_margin:
+            col += self.n_cols - right_margin - left_margin - 1
+        return replace(self, col=col)
 
 
-def do_left(window, buffer, cursor):
-    """Move the cursor left one character."""
-    if cursor.col != 0:
-        col = cursor.col - 1
-        cursor = replace(cursor, col=col, col_hint=col)
-    elif cursor.line != 0:
-        line = cursor.line - 1
-        col = len(buffer[line])
-        cursor = replace(cursor, line=line, col=col, col_hint=col)
-    window = window_up(window, buffer, cursor)
-    return window, cursor
+@dataclass
+class Editor:
+    window: object
+    buffer: object
+    cursor: object
 
+    def right(self):
+        cursor = self.cursor.right(self.buffer)
+        window = self.window.down(self.buffer, self.cursor)
+        return replace(self, window=window, cursor=cursor)
 
-def window_down(window, buffer, cursor):
-    if (
-        cursor.line == window.last_line + 1
-        and window.last_line != buffer.last_line
-    ):
-        return replace(window, line=window.line + 1)
-    return window
+    def left(self):
+        cursor = self.cursor.left(self.buffer)
+        window = self.window.up(self.cursor)
+        return replace(self, window=window, cursor=cursor)
 
+    def down(self):
+        cursor = self.cursor.down(self.buffer)
+        window = self.window.down(self.buffer, self.cursor)
+        return replace(self, window=window, cursor=cursor)
 
-def do_down(window, buffer, cursor):
-    """Move the cursor to the next line."""
-    if cursor.line == buffer.last_line:
-        return window, cursor
-    line = cursor.line + 1
-    col = min(cursor.col_hint, len(buffer[line]))
-    cursor = replace(cursor, line=line, col=col)
-    window = window_down(window, buffer, cursor)
-    return window, cursor
+    def up(self):
+        cursor = self.cursor.up(self.buffer)
+        window = self.window.up(self.cursor)
+        return replace(self, window=window, cursor=cursor)
 
+    def newline(self):
+        buffer = self.buffer.split(self.cursor.line, self.cursor.col)
+        editor = replace(self, buffer=buffer)
+        return editor.right()
 
-def window_up(window, buffer, cursor):
-    if cursor.line == window.line - 1 and window.line != 0:
-        return replace(window, line=window.line - 1)
-    return window
+    def insert(self, string):
+        buffer = self.buffer.insert(self.cursor.line, self.cursor.col, string)
+        editor = replace(self, buffer=buffer)
+        for _ in string:
+            editor = editor.right()
+        return editor
 
+    def delete(self):
+        buffer = self.buffer.delete(self.cursor.line, self.cursor.col)
+        return replace(self, buffer=buffer)
 
-def do_up(window, buffer, cursor):
-    """Move the cursor to the previous line."""
-    if cursor.line == 0:
-        return window, cursor
-    line = cursor.line - 1
-    col = min(cursor.col_hint, len(buffer[line]))
-    cursor = replace(cursor, line=line, col=col)
-    window = window_up(window, buffer, cursor)
-    return window, cursor
+    def backspace(self):
+        if self.cursor.line == 0 and self.cursor.col == 0:
+            return self
+        return self.left().delete()
 
+    def render(self, stdscr, left_margin=5, right_margin=2):
+        stdscr.erase()
 
-# nano has do_enter in text.c
-def do_enter(window, buffer, cursor):
-    """Split the line at the cursor."""
-    buffer = buffer.split(cursor.line, cursor.col)
-    window, cursor = do_right(window, buffer, cursor)
-    return window, buffer, cursor
+        window = self.window.horizontal_scroll(self.cursor, left_margin, right_margin)
 
+        buffer = self.buffer[window.line:window.line + window.n_lines]
+        for line, string in enumerate(buffer):
+            # Add arrows for horizontal scrolling.
+            if line == self.cursor.line and window.col > 0:
+                string = "«" + string[window.col + 1:]
+            if len(string) > window.n_cols:
+                string = string[:window.n_cols - 1] + "»"
 
-# nano has do_output in nano.c
-def do_insert(window, buffer, cursor, string):
-    buffer = buffer.insert(cursor.line, cursor.col, string)
-    for _ in string:
-        window, cursor = do_right(window, buffer, cursor)
-    return window, buffer, cursor
+            stdscr.addstr(line, 0, string)
 
-
-# nano has do_deletion in cut.c
-def do_delete(buffer, cursor):
-    """Delete the character under the cursor."""
-    return buffer.delete(cursor.line, cursor.col)
-
-
-# nano has do_backspace in cut.c
-def do_backspace(window, buffer, cursor):
-    """Delete the previous character."""
-    # If the cursor is at the start of the buffer, do nothing.
-    if cursor.line == 0 and cursor.col == 0:
-        return window, buffer, cursor
-    # Otherwise, move the cursor left, and delete the character under the cursor.
-    window, cursor = do_left(window, buffer, cursor)
-    buffer = do_delete(buffer, cursor)
-    return window, buffer, cursor
-
-
-def render(stdscr, window, buffer, cursor, right_margin=2, left_margin=5):
-    stdscr.erase()
-
-    # Scroll the window along the current line.
-    window_col = 0
-    while cursor.col - window_col >= window.n_cols - right_margin:
-        window_col += window.n_cols - right_margin - left_margin - 1
-
-    for line, string in enumerate(buffer[window.line:window.line + window.n_lines]):
-        # Add arrows for horizontal scrolling.
-        if line == cursor.line and window_col > 0:
-            string = "«" + string[window_col + 1:]
-        if len(string) > window.n_cols:
-            string = string[:window.n_cols - 1] + "»"
-
-        stdscr.addstr(line, 0, string)
-
-    stdscr.move(cursor.line - window.line, cursor.col - window_col)
+        stdscr.move(self.cursor.line - window.line, self.cursor.col - window.col)
 
 
 def main(stdscr):
@@ -200,31 +193,31 @@ def main(stdscr):
         buffer = Buffer(f.read().splitlines())
 
     window = Window(curses.LINES - 1, curses.COLS - 1)
-    # window = Window(4, 20)
     cursor = Cursor()
+    editor = Editor(window, buffer, cursor)
 
     while True:
-        render(stdscr, window, buffer, cursor)
+        editor.render(stdscr)
 
         k = stdscr.getkey()
         if k == "q":
             sys.exit(0)
         elif k == "KEY_LEFT":
-            window, cursor = do_left(window, buffer, cursor)
+            editor = editor.left()
         elif k == "KEY_DOWN":
-            window, cursor = do_down(window, buffer, cursor)
+            editor = editor.down()
         elif k == "KEY_UP":
-            window, cursor = do_up(window, buffer, cursor)
+            editor = editor.up()
         elif k == "KEY_RIGHT":
-            window, cursor = do_right(window, buffer, cursor)
+            editor = editor.right()
         elif k == "\n":
-            window, buffer, cursor = do_enter(window, buffer, cursor)
+            editor = editor.newline()
         elif k in ("KEY_BACKSPACE", "\b", "\x7f"):
-            window, buffer, cursor = do_backspace(window, buffer, cursor)
+            editor = editor.backspace()
         elif k in ("KEY_DELETE", "\x04"):
-            buffer = do_delete(buffer, cursor)
+            editor = editor.delete()
         else:
-            window, buffer, cursor = do_insert(window, buffer, cursor, k)
+            editor = editor.insert(k)
 
 
 if __name__ == "__main__":
