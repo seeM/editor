@@ -49,8 +49,17 @@ class Buffer:
 class Cursor:
     def __init__(self, line=0, col=0, col_hint=None):
         self.line = line
-        self.col = col
-        self.col_hint = col if col_hint is None else col_hint
+        self._col = col
+        self._col_hint = col if col_hint is None else col_hint
+
+    @property
+    def col(self):
+        return self._col
+
+    @col.setter
+    def col(self, value):
+        self._col = value
+        self._col_hint = value
 
     def up(self, buffer):
         if self.line > 0:
@@ -65,27 +74,19 @@ class Cursor:
     def left(self, buffer):
         if self.col > 0:
             self.col -= 1
-            # TODO: Use setter?
-            self.col_hint = self.col
         elif self.line > 0:
             self.line -= 1
             self.col = len(buffer[self.line])
-            # TODO: Use setter?
-            self.col_hint = self.col
 
     def right(self, buffer):
         if self.col < len(buffer[self.line]):
             self.col += 1
-            # TODO: Use setter?
-            self.col_hint = self.col
         elif self.line < buffer.last_line:
             self.line += 1
             self.col = 0
-            # TODO: Use setter?
-            self.col_hint = self.col
 
     def _clamp_col(self, buffer):
-        self.col = min(self.col, len(buffer[self.line]))
+        self._col = min(self._col_hint, len(buffer[self.line]))
 
 
 @dataclass
