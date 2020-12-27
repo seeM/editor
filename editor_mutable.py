@@ -37,19 +37,16 @@ class Buffer:
 
     def delete(self, cursor):
         line, col = cursor.line, cursor.col
-        # If at the end of the buffer, do nothing.
-        if line == self.last_line and col == len(self[line]):
-            return
-        # If at the end of a line, join the current and next lines.
-        if col == len(self[line]) and line != self.last_line:
-            current = self.lines.pop(line)
-            next = self.lines.pop(line)
-            new = current + next
-            self.lines.insert(line, new)
-        # Otherwise, delete the character.
-        current = self.lines.pop(line)
-        new = current[:col] + current[col + 1:]
-        self.lines.insert(line, new)
+        if not (col == len(self[line]) and line == self.last_line):
+            if col < len(self[line]):
+                current = self.lines.pop(line)
+                new = current[:col] + current[col + 1:]
+                self.lines.insert(line, new)
+            else:
+                current = self.lines.pop(line)
+                next = self.lines.pop(line)
+                new = current + next
+                self.lines.insert(line, new)
 
 
 class Cursor:
@@ -156,10 +153,9 @@ class Editor:
         self.buffer.delete(self.cursor)
 
     def backspace(self):
-        if self.cursor.line == 0 and self.cursor.col == 0:
-            return
-        self.left()
-        self.buffer.delete(self.cursor)
+        if self.cursor.line != 0 or self.cursor.col != 0:
+            self.left()
+            self.buffer.delete(self.cursor)
 
     def render(self, stdscr, left_margin=5, right_margin=2):
         window, buffer, cursor = self.window, self.buffer, self.cursor
