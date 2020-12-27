@@ -18,32 +18,33 @@ class Buffer:
     def last_line(self):
         return len(self) - 1
 
-    def insert(self, line, col, string):
-        current = self[line]
-        current = current[:col] + string + current[col:]
-        lines = self[:line] + [current] + self[line + 1:]
-        return replace(self, lines=lines)
+    def insert(self, cursor, string):
+        line, col = cursor.line, cursor.col
+        current = self.lines.pop(line)
+        new = current[:col] + string + current[col:]
+        self.lines.insert(line, new)
 
-    def split(self, line, col):
-        current = self[line]
-        splitted = [current[:col], current[col:]]
-        lines = self[:line] + splitted + self[line + 1:]
-        return replace(self, lines=lines)
+    def split(self, cursor):
+        line, col = cursor.line, cursor.col
+        current = self.lines.pop(line)
+        self.lines.insert(line, current[:col])
+        self.lines.insert(line + 1, current[col:])
 
-    def delete(self, line, col):
+    def delete(self, cursor):
+        line, col = cursor.line, cursor.col
         # If at the end of the buffer, do nothing.
         if line == self.last_line and col == len(self[line]):
-            return self
+            return
         # If at the end of a line, join the current and next lines.
         if col == len(self[line]) and line != self.last_line:
-            string = self[line] + self[line + 1]
-            lines = self[:line] + [string] + self[line + 2:]
-            return replace(self, lines=lines)
+            current = self.lines.pop(line)
+            next = self.lines.pop(line)
+            new = current + next
+            self.lines.insert(line, new)
         # Otherwise, delete the character.
-        current = self[line]
-        string = current[:col] + current[col + 1:]
-        lines = self[:line] + [string] + self[line + 1:]
-        return replace(self, lines=lines)
+        current = self.lines.pop(line)
+        new = current[:col] + current[col + 1:]
+        self.lines.insert(line, new)
 
 
 class Cursor:
@@ -144,25 +145,24 @@ class Editor:
         return replace(self, window=window)
 
     def newline(self):
-        buffer = self.buffer.split(self.cursor.line, self.cursor.col)
-        editor = replace(self, buffer=buffer)
-        return editor.right()
+        self.buffer.split(self.cursor)
+        return self.right()
 
     def insert(self, string):
-        buffer = self.buffer.insert(self.cursor.line, self.cursor.col, string)
-        editor = replace(self, buffer=buffer)
+        self.buffer.insert(self.cursor, string)
+        editor = self
         for _ in string:
             editor = editor.right()
         return editor
 
     def delete(self):
-        buffer = self.buffer.delete(self.cursor.line, self.cursor.col)
-        return replace(self, buffer=buffer)
+        self.buffer.delete(self.cursor)
 
     def backspace(self):
         if self.cursor.line == 0 and self.cursor.col == 0:
-            return self
-        return self.left().delete()
+            return
+        self.left()
+        self.buffer.delete(self.cursor)
 
     def render(self, stdscr, left_margin=5, right_margin=2):
         stdscr.erase()
@@ -211,9 +211,9 @@ def main(stdscr):
         elif k == "\n":
             editor = editor.newline()
         elif k in ("KEY_BACKSPACE", "\b", "\x7f"):
-            editor = editor.backspace()
+            editor.backspace()
         elif k in ("KEY_DELETE", "\x04"):
-            editor = editor.delete()
+            editor.delete()
         else:
             editor = editor.insert(k)
 
