@@ -1,12 +1,17 @@
 import argparse
 import curses
 import sys
-from dataclasses import dataclass, replace
 
 
-@dataclass
+def log(*args):
+    msg = " ".join(str(a) for a in args)
+    with open("log.txt", "a") as f:
+        f.write(msg + "\n")
+
+
 class Buffer:
-    lines: object
+    def __init__(self, lines):
+        self.lines = lines
 
     def __len__(self):
         return len(self.lines)
@@ -58,9 +63,9 @@ class Cursor:
         return self._col
 
     @col.setter
-    def col(self, value):
-        self._col = value
-        self._col_hint = value
+    def col(self, col):
+        self._col = col
+        self._col_hint = col
 
     def up(self, buffer):
         if self.line > 0:
@@ -90,12 +95,12 @@ class Cursor:
         self._col = min(self._col_hint, len(buffer[self.line]))
 
 
-@dataclass
 class Window:
-    n_lines: object
-    n_cols: object
-    line: object = 0
-    col: object = 0
+    def __init__(self, n_lines, n_cols, line=0, col=0):
+        self.n_lines = n_lines
+        self.n_cols = n_cols
+        self.line = line
+        self.col = col
 
     @property
     def last_line(self):
@@ -103,57 +108,49 @@ class Window:
 
     def down(self, buffer, cursor):
         if cursor.line == self.last_line + 1 and self.last_line != buffer.last_line:
-            return replace(self, line=self.line + 1)
-        return self
+            self.line += 1
 
     def up(self, cursor):
         if cursor.line == self.line - 1 and self.line != 0:
-            return replace(self, line=self.line - 1)
-        return self
+            self.line -= 1
 
     def horizontal_scroll(self, cursor, left_margin, right_margin):
         col = 0
         while cursor.col - col >= self.n_cols - right_margin:
             col += self.n_cols - right_margin - left_margin - 1
-        return replace(self, col=col)
+        self.col = col
 
 
-@dataclass
 class Editor:
-    window: object
-    buffer: object
-    cursor: object
+    def __init__(self, window, buffer, cursor):
+        self.window = window
+        self.buffer = buffer
+        self.cursor = cursor
 
     def right(self):
         self.cursor.right(self.buffer)
-        window = self.window.down(self.buffer, self.cursor)
-        return replace(self, window=window)
+        self.window.down(self.buffer, self.cursor)
 
     def left(self):
         self.cursor.left(self.buffer)
-        window = self.window.up(self.cursor)
-        return replace(self, window=window)
+        self.window.up(self.cursor)
 
     def down(self):
         self.cursor.down(self.buffer)
-        window = self.window.down(self.buffer, self.cursor)
-        return replace(self, window=window)
+        self.window.down(self.buffer, self.cursor)
 
     def up(self):
         self.cursor.up(self.buffer)
-        window = self.window.up(self.cursor)
-        return replace(self, window=window)
+        self.window.up(self.cursor)
 
     def newline(self):
         self.buffer.split(self.cursor)
-        return self.right()
+        self.right()
 
     def insert(self, string):
         self.buffer.insert(self.cursor, string)
-        editor = self
         for _ in string:
-            editor = editor.right()
-        return editor
+            self.right()
 
     def delete(self):
         self.buffer.delete(self.cursor)
@@ -165,21 +162,23 @@ class Editor:
         self.buffer.delete(self.cursor)
 
     def render(self, stdscr, left_margin=5, right_margin=2):
+        window, buffer, cursor = self.window, self.buffer, self.cursor
+
         stdscr.erase()
 
-        window = self.window.horizontal_scroll(self.cursor, left_margin, right_margin)
+        window.horizontal_scroll(cursor, left_margin, right_margin)
 
-        buffer = self.buffer[window.line:window.line + window.n_lines]
+        buffer = buffer[window.line:window.line + window.n_lines]
         for line, string in enumerate(buffer):
             # Add arrows for horizontal scrolling.
-            if line == self.cursor.line and window.col > 0:
+            if line == cursor.line - window.line and window.col > 0:
                 string = "«" + string[window.col + 1:]
             if len(string) > window.n_cols:
                 string = string[:window.n_cols - 1] + "»"
 
             stdscr.addstr(line, 0, string)
 
-        stdscr.move(self.cursor.line - window.line, self.cursor.col - window.col)
+        stdscr.move(cursor.line - window.line, cursor.col - window.col)
 
 
 def main(stdscr):
@@ -201,21 +200,21 @@ def main(stdscr):
         if k == "q":
             sys.exit(0)
         elif k == "KEY_LEFT":
-            editor = editor.left()
+            editor.left()
         elif k == "KEY_DOWN":
-            editor = editor.down()
+            editor.down()
         elif k == "KEY_UP":
-            editor = editor.up()
+            editor.up()
         elif k == "KEY_RIGHT":
-            editor = editor.right()
+            editor.right()
         elif k == "\n":
-            editor = editor.newline()
+            editor.newline()
         elif k in ("KEY_BACKSPACE", "\b", "\x7f"):
             editor.backspace()
         elif k in ("KEY_DELETE", "\x04"):
             editor.delete()
         else:
-            editor = editor.insert(k)
+            editor.insert(k)
 
 
 if __name__ == "__main__":
