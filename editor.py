@@ -56,39 +56,39 @@ class Cursor:
         if self.col_hint is None:
             self.col_hint = self.col
 
-    def right(self, buffer):
-        if self.col != len(buffer[self.line]):
-            col = self.col + 1
-            return replace(self, col=col, col_hint=col)
-        if self.line != buffer.last_line:
+    def up(self, buffer):
+        if self.line > 0:
+            line = self.line - 1
+            col = min(self.col_hint, len(buffer[line]))
+            return replace(self, line=line, col=col)
+        return self
+
+    def down(self, buffer):
+        if self.line < buffer.last_line:
             line = self.line + 1
-            col = 0
-            return replace(self, line=line, col=col, col_hint=col)
+            col = min(self.col_hint, len(buffer[line]))
+            return replace(self, line=line, col=col)
         return self
 
     def left(self, buffer):
-        if self.col != 0:
+        if self.col > 0:
             col = self.col - 1
             return replace(self, col=col, col_hint=col)
-        if self.line != 0:
+        if self.line > 0:
             line = self.line - 1
             col = len(buffer[line])
             return replace(self, line=line, col=col, col_hint=col)
         return self
 
-    def down(self, buffer):
-        if self.line == buffer.last_line:
-            return self
-        line = self.line + 1
-        col = min(self.col_hint, len(buffer[line]))
-        return replace(self, line=line, col=col)
-
-    def up(self, buffer):
-        if self.line == 0:
-            return self
-        line = self.line - 1
-        col = min(self.col_hint, len(buffer[line]))
-        return replace(self, line=line, col=col)
+    def right(self, buffer):
+        if self.col < len(buffer[self.line]):
+            col = self.col + 1
+            return replace(self, col=col, col_hint=col)
+        if self.line < buffer.last_line:
+            line = self.line + 1
+            col = 0
+            return replace(self, line=line, col=col, col_hint=col)
+        return self
 
 
 @dataclass
