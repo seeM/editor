@@ -3,12 +3,6 @@ import curses
 import sys
 
 
-def log(*args):
-    msg = " ".join(str(a) for a in args)
-    with open("log.txt", "a") as f:
-        f.write(msg + "\n")
-
-
 class Buffer:
     def __init__(self, lines):
         self.lines = lines
@@ -20,38 +14,37 @@ class Buffer:
         return self.lines[index]
 
     @property
-    def last_line(self):
+    def bottom(self):
         return len(self) - 1
 
     def insert(self, cursor, string):
-        line, col = cursor.line, cursor.col
-        current = self.lines.pop(line)
+        row, col = cursor.row, cursor.col
+        current = self.lines.pop(row)
         new = current[:col] + string + current[col:]
-        self.lines.insert(line, new)
+        self.lines.insert(row, new)
 
     def split(self, cursor):
-        line, col = cursor.line, cursor.col
-        current = self.lines.pop(line)
-        self.lines.insert(line, current[:col])
-        self.lines.insert(line + 1, current[col:])
+        row, col = cursor.row, cursor.col
+        current = self.lines.pop(row)
+        self.lines.insert(row, current[:col])
+        self.lines.insert(row + 1, current[col:])
 
     def delete(self, cursor):
-        line, col = cursor.line, cursor.col
-        if not (col == len(self[line]) and line == self.last_line):
-            if col < len(self[line]):
-                current = self.lines.pop(line)
+        row, col = cursor.row, cursor.col
+        if (row, col) < (self.bottom, len(self[row])):
+            current = self.lines.pop(row)
+            if col < len(self[row]):
                 new = current[:col] + current[col + 1:]
-                self.lines.insert(line, new)
+                self.lines.insert(row, new)
             else:
-                current = self.lines.pop(line)
-                next = self.lines.pop(line)
+                next = self.lines.pop(row)
                 new = current + next
-                self.lines.insert(line, new)
+                self.lines.insert(row, new)
 
 
 class Cursor:
-    def __init__(self, line=0, col=0, col_hint=None):
-        self.line = line
+    def __init__(self, row=0, col=0, col_hint=None):
+        self.row = row
         self._col = col
         self._col_hint = col if col_hint is None else col_hint
 
@@ -65,51 +58,51 @@ class Cursor:
         self._col_hint = col
 
     def up(self, buffer):
-        if self.line > 0:
-            self.line -= 1
+        if self.row > 0:
+            self.row -= 1
             self._clamp_col(buffer)
 
     def down(self, buffer):
-        if self.line < buffer.last_line:
-            self.line += 1
+        if self.row < buffer.bottom:
+            self.row += 1
             self._clamp_col(buffer)
 
     def left(self, buffer):
         if self.col > 0:
             self.col -= 1
-        elif self.line > 0:
-            self.line -= 1
-            self.col = len(buffer[self.line])
+        elif self.row > 0:
+            self.row -= 1
+            self.col = len(buffer[self.row])
 
     def right(self, buffer):
-        if self.col < len(buffer[self.line]):
+        if self.col < len(buffer[self.row]):
             self.col += 1
-        elif self.line < buffer.last_line:
-            self.line += 1
+        elif self.row < buffer.bottom:
+            self.row += 1
             self.col = 0
 
     def _clamp_col(self, buffer):
-        self._col = min(self._col_hint, len(buffer[self.line]))
+        self._col = min(self._col_hint, len(buffer[self.row]))
 
 
 class Window:
-    def __init__(self, n_lines, n_cols, line=0, col=0):
-        self.n_lines = n_lines
+    def __init__(self, n_rows, n_cols, row=0, col=0):
+        self.n_rows = n_rows
         self.n_cols = n_cols
-        self.line = line
+        self.row = row
         self.col = col
 
     @property
-    def last_line(self):
-        return self.line + self.n_lines - 1
-
-    def down(self, buffer, cursor):
-        if cursor.line == self.last_line + 1 and self.last_line != buffer.last_line:
-            self.line += 1
+    def bottom(self):
+        return self.row + self.n_rows - 1
 
     def up(self, cursor):
-        if cursor.line == self.line - 1 and self.line != 0:
-            self.line -= 1
+        if cursor.row == self.row - 1 and self.row > 0:
+            self.row -= 1
+
+    def down(self, buffer, cursor):
+        if cursor.row == self.bottom + 1 and self.bottom < buffer.bottom:
+            self.row += 1
 
     def horizontal_scroll(self, cursor, left_margin, right_margin):
         col = 0
@@ -124,21 +117,25 @@ class Editor:
         self.buffer = buffer
         self.cursor = cursor
 
-    def right(self):
-        self.cursor.right(self.buffer)
-        self.window.down(self.buffer, self.cursor)
-
-    def left(self):
-        self.cursor.left(self.buffer)
+    def up(self):
+        self.cursor.up(self.buffer)
         self.window.up(self.cursor)
+        self.window.horizontal_scroll(self.cursor)
 
     def down(self):
         self.cursor.down(self.buffer)
         self.window.down(self.buffer, self.cursor)
+        self.window.horizontal_scroll(self.cursor)
 
-    def up(self):
-        self.cursor.up(self.buffer)
+    def left(self):
+        self.cursor.left(self.buffer)
         self.window.up(self.cursor)
+        self.window.horizontal_scroll(self.cursor)
+
+    def right(self):
+        self.cursor.right(self.buffer)
+        self.window.down(self.buffer, self.cursor)
+        self.window.horizontal_scroll(self.cursor)
 
     def newline(self):
         self.buffer.split(self.cursor)
@@ -153,28 +150,48 @@ class Editor:
         self.buffer.delete(self.cursor)
 
     def backspace(self):
-        if self.cursor.line != 0 or self.cursor.col != 0:
+        if (self.cursor.row, self.cursor.col) > (0, 0):
             self.left()
             self.buffer.delete(self.cursor)
 
-    def render(self, stdscr, left_margin=5, right_margin=2):
-        window, buffer, cursor = self.window, self.buffer, self.cursor
 
-        stdscr.erase()
+def render(stdscr, editor):
+    window, buffer, cursor = editor.window, editor.buffer, editor.cursor
 
-        window.horizontal_scroll(cursor, left_margin, right_margin)
+    stdscr.erase()
 
-        buffer = buffer[window.line:window.line + window.n_lines]
-        for line, string in enumerate(buffer):
-            # Add arrows for horizontal scrolling.
-            if line == cursor.line - window.line and window.col > 0:
-                string = "«" + string[window.col + 1:]
-            if len(string) > window.n_cols:
-                string = string[:window.n_cols - 1] + "»"
+    buffer = buffer[window.row:window.row + window.n_rows]
+    for row, string in enumerate(buffer):
+        if row == cursor.row - window.row and window.col > 0:
+            string = "«" + string[window.col + 1:]
+        if len(string) > window.n_cols:
+            string = string[:window.n_cols - 1] + "»"
 
-            stdscr.addstr(line, 0, string)
+        stdscr.addstr(row, 0, string)
 
-        stdscr.move(cursor.line - window.line, cursor.col - window.col)
+    stdscr.move(cursor.row - window.row, cursor.col - window.col)
+
+
+def handle_key(stdscr, editor):
+    k = stdscr.getkey()
+    if k == "q":
+        sys.exit(0)
+    elif k == "KEY_LEFT":
+        editor.left()
+    elif k == "KEY_DOWN":
+        editor.down()
+    elif k == "KEY_UP":
+        editor.up()
+    elif k == "KEY_RIGHT":
+        editor.right()
+    elif k == "\n":
+        editor.newline()
+    elif k in ("KEY_BACKSPACE", "\b", "\x7f"):
+        editor.backspace()
+    elif k in ("KEY_DELETE", "\x04"):
+        editor.delete()
+    else:
+        editor.insert(k)
 
 
 def main(stdscr):
@@ -190,27 +207,8 @@ def main(stdscr):
     editor = Editor(window, buffer, cursor)
 
     while True:
-        editor.render(stdscr)
-
-        k = stdscr.getkey()
-        if k == "q":
-            sys.exit(0)
-        elif k == "KEY_LEFT":
-            editor.left()
-        elif k == "KEY_DOWN":
-            editor.down()
-        elif k == "KEY_UP":
-            editor.up()
-        elif k == "KEY_RIGHT":
-            editor.right()
-        elif k == "\n":
-            editor.newline()
-        elif k in ("KEY_BACKSPACE", "\b", "\x7f"):
-            editor.backspace()
-        elif k in ("KEY_DELETE", "\x04"):
-            editor.delete()
-        else:
-            editor.insert(k)
+        render(stdscr, editor)
+        handle_key(stdscr, editor)
 
 
 if __name__ == "__main__":
