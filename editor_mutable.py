@@ -161,13 +161,13 @@ def render(stdscr, editor):
     stdscr.erase()
 
     buffer = buffer[window.row:window.row + window.n_rows]
-    for row, string in enumerate(buffer):
+    for row, line in enumerate(buffer):
         if row == cursor.row - window.row and window.col > 0:
-            string = "«" + string[window.col + 1:]
-        if len(string) > window.n_cols:
-            string = string[:window.n_cols - 1] + "»"
+            line = "«" + line[window.col + 1:]
+        if len(line) > window.n_cols:
+            line = line[:window.n_cols - 1] + "»"
 
-        stdscr.addstr(row, 0, string)
+        stdscr.addstr(row, 0, line)
 
     stdscr.move(cursor.row - window.row, cursor.col - window.col)
 
