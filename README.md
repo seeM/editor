@@ -1,3 +1,3 @@
 # editor
 
-A text editor written in Python + `curses`.
+Minimal terminal text editor written in Python and curses.
