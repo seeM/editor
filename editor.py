@@ -116,8 +116,8 @@ class Window:
             self.row += 1
 
     def horizontal_scroll(self, cursor, left_margin=5, right_margin=2):
-        n_pages = cursor.col // (self.n_cols - right_margin)
-        self.col = max(n_pages * self.n_cols - right_margin - left_margin, 0)
+        n_pages = max((cursor.col - left_margin) // (self.n_cols - right_margin - left_margin), 0)
+        self.col = max(n_pages * (self.n_cols - right_margin - left_margin), 0)
 
     def translate(self, cursor):
         return cursor.row - self.row, cursor.col - self.col
